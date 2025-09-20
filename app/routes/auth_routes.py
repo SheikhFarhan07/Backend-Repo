@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app import database, models, schemas
 from app.utils.hashing import Hash
+from app.auth import create_access_token, decode_access_token
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter(
     prefix="/auth",
@@ -37,7 +39,6 @@ def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
 
 
 @router.post("/login")
-
 def login(user: schemas.UserLogin, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
 
@@ -53,4 +54,14 @@ def login(user: schemas.UserLogin, db: Session = Depends(database.get_db)):
             detail="Invalid password"
         )
 
-    return {"message": "Login successful"}
+    # Create JWT token
+    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+# Example protected route
+security = HTTPBearer()
+
+@router.get("/me")
+def get_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    return {"user": payload}
